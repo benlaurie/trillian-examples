@@ -97,3 +97,45 @@ doesn't have. In that case, the server will return the number of
 leaves it does have so we can take appropriate action. Although this
 can't happen in this test setup (since there's only one server) it is
 a bad idea to ignore the problem, so we deal with it now.
+
+Step 4
+------
+
+If we're aiming to replicate the functionality of the original
+registers, then one thing we need to be able to do it produce the
+current records (i.e. this API:
+https://registers-docs.cloudapps.digital/#get-records).
+
+The best way to do that using Trillian is to create a map, going from
+the keys to the current records.
+
+All the data required for this map is in the log already. Although the
+databases we're dealing with are small enough we could get away with
+doing everything in one lump, we'll treat it as if the database was
+very big and we have to build the map up a little at a time.
+
+The first thing we need to do is iterate through the log, just as we
+did above. So, we refactor the log reading code to live in
+`trillian_client/client.go`, and then use that to retrieve the log,
+one leaf at a time. You can see the refactored code that uses it in
+`extract/main.go`.
+
+Each log entry is a combination of an "entry" in the register plus an
+"item" from that entry. The "records" in a GDS register consist of the
+latest version of each entry, keyed by the "key" field, combined with
+all the items for that entry. So, we need to make a map that maps from
+entry keys to entry contents plus the items that go with that entry.
+
+First we need to run a map server:
+
+`make tmserver`
+
+This will occupy a terminal window.
+
+And then create the map:
+
+`make createmap`
+
+Then we can run the mapper:
+
+`make mapper`
