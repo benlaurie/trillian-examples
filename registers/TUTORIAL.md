@@ -161,3 +161,20 @@ Note that if you've previously run the mapper, you'll need to delete and recreat
 Check it works by extracting the whole map:
 
 `make extractmap_all`
+
+Step 7
+------
+
+Add a webserver.
+
+The map server needs to be running:
+
+`make tmserver`
+
+Then run the webserver:
+
+`make webserver`
+
+and surf to http://localhost:8080/records.json.
+
+Note that currently only the records.json endpoint is handled.
