@@ -147,3 +147,17 @@ Look things up in the map, command line only.
 
 `make tmserver`
 `make extractmap`
+
+Step 6
+------
+
+Refactor so we have a list of keys, so we can implement the /records
+endpoint (in the next step).
+
+Note that if you've previously run the mapper, you'll need to delete and recreate the map:
+
+`make deletemap createmap mapper`
+
+Check it works by extracting the whole map:
+
+`make extractmap_all`

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/trillian"
+	"github.com/google/trillian-examples/registers/records"
 	"github.com/google/trillian-examples/registers/trillian_client"
 	"google.golang.org/grpc"
 )
@@ -27,7 +27,7 @@ type record struct {
 	Items []map[string]interface{}
 }
 
-// add only adds if the item is not already present in Items.
+// add adds an item. Only adds if the item is not already present in Items.
 func (r *record) add(i map[string]interface{}) {
 	for _, ii := range r.Items {
 		if reflect.DeepEqual(i, ii) {
@@ -38,12 +38,14 @@ func (r *record) add(i map[string]interface{}) {
 }
 
 type mapInfo struct {
-	mapID int64
-	tc    trillian.TrillianMapClient
-	ctx   context.Context
+	mapID    int64
+	tc       trillian.TrillianMapClient
+	ctx      context.Context
+	keyCount int
 }
 
 func newInfo(tc trillian.TrillianMapClient, mapID int64, ctx context.Context) *mapInfo {
+	// FIXME: need to figure out current keyCount...
 	i := &mapInfo{mapID: mapID, tc: tc, ctx: ctx}
 	return i
 }
@@ -51,6 +53,22 @@ func newInfo(tc trillian.TrillianMapClient, mapID int64, ctx context.Context) *m
 func (i *mapInfo) createRecord(key string, entry map[string]interface{}, item map[string]interface{}) {
 	ii := [1]map[string]interface{}{item}
 	i.saveRecord(key, &record{Entry: entry, Items: ii[:]})
+}
+
+func (i *mapInfo) addToMap(h []byte, v []byte) {
+	l := trillian.MapLeaf{
+		Index:     h,
+		LeafValue: v,
+	}
+
+	req := trillian.SetMapLeavesRequest{
+		MapId:  i.mapID,
+		Leaves: []*trillian.MapLeaf{&l},
+	}
+
+	if _, err := i.tc.SetLeaves(i.ctx, &req); err != nil {
+		log.Fatalf("SetLeaves() failed: %v", err)
+	}
 }
 
 func (i *mapInfo) saveRecord(key string, value interface{}) {
@@ -61,25 +79,18 @@ func (i *mapInfo) saveRecord(key string, value interface{}) {
 		log.Fatalf("Marshal() failed: %v", err)
 	}
 
-	hash := sha256.Sum256([]byte(key))
-	l := trillian.MapLeaf{
-		Index:     hash[:],
-		LeafValue: v,
-	}
+	hash := records.RecordHash(key)
+	i.addToMap(hash, v)
+}
 
-	req := trillian.SetMapLeavesRequest{
-		MapId:  i.mapID,
-		Leaves: []*trillian.MapLeaf{&l},
-	}
-
-	if _, err = i.tc.SetLeaves(i.ctx, &req); err != nil {
-		log.Fatalf("SetLeaves() failed: %v", err)
-	}
+func (i *mapInfo) addKey(key string) {
+	i.addToMap(records.KeyHash(i.keyCount), []byte(key))
+	i.keyCount++
 }
 
 func (i *mapInfo) getLeaf(key string) (*record, error) {
-	hash := sha256.Sum256([]byte(key))
-	index := [1][]byte{hash[:]}
+	hash := records.RecordHash(key)
+	index := [1][]byte{hash}
 	req := &trillian.GetMapLeavesRequest{
 		MapId: i.mapID,
 		Index: index[:],
@@ -144,6 +155,7 @@ func (s *logScanner) Leaf(leaf *trillian.LogLeaf) error {
 	}
 	if cr == nil {
 		s.info.createRecord(k, e, i)
+		s.info.addKey(k)
 		return nil
 	}
 
